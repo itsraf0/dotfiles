@@ -1,3 +1,5 @@
+#!/bin/zsh
+
 # Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
@@ -14,7 +16,23 @@ zstyle ':omz:update' mode auto      # update automatically without asking
 COMPLETION_WAITING_DOTS="true"
 HIST_STAMPS="yyyy-mm-dd"
 
-# ZSH_CUSTOM=/path/to/new-custom-folder
+# Install missing plugins if needed
+ZSH_CUSTOM="${ZSH_CUSTOM:-$ZSH/custom}"
+if [ ! -d "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting" ]; then
+  echo "Installing zsh-syntax-highlighting..."
+  git clone https://github.com/zsh-users/zsh-syntax-highlighting.git "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting"
+fi
+
+if [ ! -d "$ZSH_CUSTOM/plugins/zsh-autosuggestions" ]; then
+  echo "Installing zsh-autosuggestions..."
+  git clone https://github.com/zsh-users/zsh-autosuggestions.git "$ZSH_CUSTOM/plugins/zsh-autosuggestions"
+fi
+
+# Install powerlevel10k theme if using Oh My Zsh
+if [ ! -d "$ZSH_CUSTOM/themes/powerlevel10k" ]; then
+  echo "Installing powerlevel10k theme for Oh My Zsh..."
+  git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$ZSH_CUSTOM/themes/powerlevel10k"
+fi
 
 plugins=(
   git
@@ -22,12 +40,12 @@ plugins=(
   brew
   vscode
   npm
-  fzf
   yarn
   node
   python
   pip
   zsh-syntax-highlighting
+  zsh-autosuggestions
   colored-man-pages
   colorize
   command-not-found
@@ -51,7 +69,7 @@ setopt HIST_IGNORE_DUPS
 setopt HIST_IGNORE_ALL_DUPS
 setopt HIST_FIND_NO_DUPS
 setopt HIST_SAVE_NO_DUPS
-
+setopt extended_glob
 
 # Lazy load NVM for faster shell startup
 nvm() {
@@ -74,6 +92,7 @@ npm() {
   [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
   npm "$@"
 }
+
 # Python pyenv
 if command -v pyenv 1>/dev/null 2>&1; then
   eval "$(pyenv init -)"
@@ -91,23 +110,23 @@ if command -v rbenv 1>/dev/null 2>&1; then
   eval "$(rbenv init -)"
 fi
 
-# fzf configuration - fuzzy finder
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-export FZF_DEFAULT_OPTS="--height 40% --layout=reverse --border --preview 'bat --color=always --style=numbers --line-range=:500 {}'"
-export FZF_DEFAULT_COMMAND="fd --type f --hidden --follow --exclude .git"
-export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
 
 # System aliases
 alias zshrc="$EDITOR ~/.zshrc"
 alias reload="source ~/.zshrc"
-alias brewup="brew update && brew upgrade && brew cleanup"
+alias brewup="brew update && brew upgrade"
 alias i="brew update && brew upgrade && brew cleanup && ping -c 4 1.1.1.1 && ls -a && neofetch"
-alias ls="ls -G"
+alias ls="ls -la"
 alias ll="ls -lah"
 alias la="ls -A"
 alias l="ls -CF"
 alias cl="clear"
 alias p='ping -c 4 1.1.1.1 && ping -c 4 8.8.8.8'
+alias nolock='defaults write com.apple.loginwindow DisableScreenLockImmediate -bool yes'
+alias sort="~/sort-files.sh"
+alias rafsort="~/sort-files.sh"
+alias neo="neofetch"
+alias cnc="~/cookandclean.sh"
 
 # Git aliases
 alias gs="git status"
@@ -169,6 +188,7 @@ alias ybuild="yarn build"
 alias ystart="yarn start"
 alias ytest="yarn test"
 
+
 # Quick shortcuts
 alias c="code ."
 alias h="history | grep"
@@ -185,171 +205,11 @@ alias hidefiles="defaults write com.apple.finder AppleShowAllFiles NO; killall F
 alias cleands="find . -type f -name '*.DS_Store' -ls -delete"
 alias flushdns="sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder"
 alias emptytrash="rm -rf ~/.Trash/*"
-alias cook="brewup && yarn upgrade && npm upgrade -g && pip-upgrade"
-alias clean="brew cleanup && docker-clean && sudo find . -type f -name '*.DS_Store' -ls -delete && rm -rf ~/.Trash/* && sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder && neofetch"
-
-#fzf
-alias fzff="fzf --height 100% --layout=reverse --border --preview 'bat --color=always --style=numbers --line-range=:500 {}'"
 
 # Disk usage
 alias diskspace="df -h"
 alias foldersize="du -sh"
 alias bigfolders="du -k ~ | sort -nr | head -20"
-
-# Security
-if [ -n "$TMUX" ]; then
-  function refresh {
-    export $(tmux show-environment | grep "^SSH_AUTH_SOCK")
-  }
-else
-  function refresh { }
-fi
-
-note() {
-  local notes_dir="$HOME/notes"
-  local daily_dir="$notes_dir/daily"
-  
-  # Create notes directories if they don't exist
-  if [ ! -d "$notes_dir" ]; then
-    mkdir -p "$notes_dir"
-  fi
-  
-  if [ ! -d "$daily_dir" ]; then
-    mkdir -p "$daily_dir"
-  fi
-  
-  local today=$(date +%Y-%m-%d)
-  local daily_note_file="$daily_dir/$today.md"
-  
-  # Handle different subcommands
-  case "$1" in
-    "list")
-      find "$notes_dir" -type f -name "*.md" | sort
-      ;;
-      
-    "daily")
-      # Create today's note if it doesn't exist
-      if [ ! -f "$daily_note_file" ]; then
-        echo "# Daily Note: $today" > "$daily_note_file"
-      fi
-      $EDITOR "$daily_note_file"
-      ;;
-      
-    "find")
-      if [ -z "$2" ]; then
-        # If no keyword provided, open notes folder in fzf
-        if command -v fzf >/dev/null 2>&1; then
-          selected_note=$(find "$notes_dir" -type f -name "*.md" | fzf --preview 'cat {}')
-          if [ -n "$selected_note" ]; then
-            $EDITOR "$selected_note"
-          fi
-        else
-          echo "fzf is not installed. Please install fzf to use this feature."
-        fi
-      else
-        # Search titles and content for keyword
-        echo "Notes containing \"$2\":"
-        grep -l -r "$2" "$notes_dir" --include="*.md" | while read -r file; do
-          echo "$(basename "$file" .md): $(head -n 1 "$file" | sed 's/^# //')"
-        done
-      fi
-      ;;
-      
-    "edit")
-      if [ -z "$2" ]; then
-        echo "Please provide a note name to edit."
-        return 1
-      fi
-      
-      # Try to find the note
-      local note_path=""
-      if [ -f "$notes_dir/$2.md" ]; then
-        note_path="$notes_dir/$2.md"
-      elif [ -f "$daily_dir/$2.md" ]; then
-        note_path="$daily_dir/$2.md"
-      else
-        # Try to find by partial match
-        note_path=$(find "$notes_dir" -type f -name "*$2*.md" | head -n 1)
-      fi
-      
-      if [ -n "$note_path" ]; then
-        $EDITOR "$note_path"
-      else
-        echo "Note not found: $2"
-        return 1
-      fi
-      ;;
-      
-    "preview")
-      if [ -z "$2" ]; then
-        echo "Please provide a note name to preview."
-        return 1
-      fi
-      
-      # Try to find the note
-      local note_path=""
-      if [ -f "$notes_dir/$2.md" ]; then
-        note_path="$notes_dir/$2.md"
-      elif [ -f "$daily_dir/$2.md" ]; then
-        note_path="$daily_dir/$2.md"
-      else
-        # Try to find by partial match
-        note_path=$(find "$notes_dir" -type f -name "*$2*.md" | head -n 1)
-      fi
-      
-      if [ -n "$note_path" ]; then
-        # Use bat if available, otherwise cat
-        if command -v bat >/dev/null 2>&1; then
-          bat --style=plain "$note_path"
-        else
-          cat "$note_path"
-        fi
-      else
-        echo "Note not found: $2"
-        return 1
-      fi
-      ;;
-      
-    "dq") # Quickly append to today's daily note
-      if [ -z "$2" ]; then
-        echo "Please provide content to add to today's note."
-        return 1
-      fi
-      
-      # Create today's note if it doesn't exist
-      if [ ! -f "$daily_note_file" ]; then
-        echo "# Daily Note: $today" > "$daily_note_file"
-      fi
-      
-      # Append the content with timestamp
-      echo -e "\n$(date +"%H:%M") $2" >> "$daily_note_file"
-      echo "Note added to $daily_note_file"
-      ;;
-      
-    *)
-      # Default behavior: create a new note with title from command
-      if [ -z "$1" ]; then
-        echo "Please provide a title for your note."
-        return 1
-      fi
-      
-      # Use the first argument as the title
-      local title="$1"
-      local filename=$(echo "$title" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
-      local note_file="$notes_dir/$filename.md"
-      
-      # Create the note with a proper title
-      if [ ! -f "$note_file" ]; then
-        echo "# $title" > "$note_file"
-        echo -e "\nCreated on: $(date +"%Y-%m-%d %H:%M")" >> "$note_file"
-        echo -e "\n" >> "$note_file"
-      fi
-      
-      # Open in editor
-      $EDITOR "$note_file"
-      ;;
-  esac
-}
 
 gitlog() {
   git log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
@@ -456,6 +316,17 @@ hs() {
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 
-# Syntax highlighting - should be last
-# Install: git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
-# Install: git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
+# Use brew installed powerlevel10k if not using Oh My Zsh theme
+if [[ "$ZSH_THEME" != "powerlevel10k/powerlevel10k" ]]; then
+  source "$(brew --prefix)/share/powerlevel10k/powerlevel10k.zsh-theme"
+fi
+
+# Source syntax highlighting if it's installed via Homebrew
+if [[ -f $(brew --prefix)/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]]; then
+  source $(brew --prefix)/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+fi
+
+# Source autosuggestions if it's installed via Homebrew
+if [[ -f $(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]]; then
+  source $(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+fi
